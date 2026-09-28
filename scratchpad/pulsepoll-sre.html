@@ -1,0 +1,930 @@
+<title>PulsePoll</title>
+<style>
+:root{
+  --bg:#eef1f5;
+  --surface:#ffffff;
+  --surface-2:#e4e9ef;
+  --text:#1b2430;
+  --text-dim:#5b6472;
+  --accent:#2f6f6b;
+  --accent-soft:#dcece9;
+  --border:#d7dce2;
+  --danger:#b3261e;
+  --danger-soft:#f8e3e1;
+  --warning:#8a6100;
+  --warning-soft:#f6ecd2;
+  --success:#1e7d4a;
+  --success-soft:#e0f0e6;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif: 'Newsreader', Georgia, serif;
+  --sans: 'Public Sans', -apple-system, Segoe UI, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151c;
+    --surface:#1a2029;
+    --surface-2:#212a35;
+    --text:#e7ecf2;
+    --text-dim:#94a1b3;
+    --accent:#6bbdb5;
+    --accent-soft:#1c3532;
+    --border:#2b3440;
+    --danger:#ff8177;
+    --danger-soft:#3a1f1d;
+    --warning:#e6b355;
+    --warning-soft:#3a2f14;
+    --success:#5fd696;
+    --success-soft:#173625;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10151c;
+  --surface:#1a2029;
+  --surface-2:#212a35;
+  --text:#e7ecf2;
+  --text-dim:#94a1b3;
+  --accent:#6bbdb5;
+  --accent-soft:#1c3532;
+  --border:#2b3440;
+  --danger:#ff8177;
+  --danger-soft:#3a1f1d;
+  --warning:#e6b355;
+  --warning-soft:#3a2f14;
+  --success:#5fd696;
+  --success-soft:#173625;
+  color-scheme: dark;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  line-height:1.6;
+  padding-inline:0;
+}
+
+.shell{
+  display:grid;
+  grid-template-columns: 260px minmax(0,1fr);
+  max-width:1180px;
+  margin:0 auto;
+  gap:0;
+}
+@media (max-width: 860px){
+  .shell{grid-template-columns: 1fr;}
+  nav.toc{position:static !important; max-height:none !important; border-right:none !important; border-bottom:1px solid var(--border);}
+}
+
+nav.toc{
+  position:sticky;
+  top: calc(env(safe-area-inset-top,0px) + 16px);
+  align-self:start;
+  max-height: calc(100vh - 32px);
+  overflow-y:auto;
+  padding:28px 20px;
+  border-right:1px solid var(--border);
+}
+nav.toc .brand{
+  font-family:var(--serif);
+  font-size:1.3rem;
+  font-weight:600;
+  margin-bottom:4px;
+}
+nav.toc .brand-sub{
+  font-size:.72rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-bottom:22px;
+  display:block;
+}
+nav.toc a{
+  display:block;
+  font-size:.86rem;
+  color:var(--text-dim);
+  text-decoration:none;
+  padding:6px 0;
+  border-left:2px solid transparent;
+  padding-left:10px;
+  margin-left:-12px;
+}
+nav.toc a:hover{color:var(--text); border-left-color:var(--accent);}
+nav.toc .grp{
+  font-size:.68rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-top:18px;
+  margin-bottom:4px;
+  opacity:.75;
+}
+
+main{
+  padding: 28px clamp(16px, 4vw, 56px) 80px;
+  min-width:0;
+}
+
+header.doc-head{
+  padding-bottom:28px;
+  margin-bottom:32px;
+  border-bottom:1px solid var(--border);
+}
+header.doc-head .kicker{
+  font-size:.75rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--accent);
+  font-weight:600;
+  margin-bottom:10px;
+}
+header.doc-head h1{
+  font-family:var(--serif);
+  font-size:clamp(2rem, 4.5vw, 2.9rem);
+  font-weight:600;
+  margin:0 0 10px;
+  text-wrap:balance;
+}
+header.doc-head p.lede{
+  font-size:1.05rem;
+  color:var(--text-dim);
+  max-width:62ch;
+  margin:0 0 18px;
+}
+.meta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.badge{
+  font-family:var(--mono);
+  font-size:.72rem;
+  padding:4px 10px;
+  border-radius:99px;
+  border:1px solid var(--border);
+  color:var(--text-dim);
+  background:var(--surface);
+}
+
+section{margin-bottom:52px; scroll-margin-top: 20px;}
+section h2{
+  font-family:var(--serif);
+  font-size:1.6rem;
+  font-weight:600;
+  margin:0 0 6px;
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+section h2 .num{
+  font-family:var(--mono);
+  font-size:.95rem;
+  color:var(--accent);
+  font-weight:500;
+}
+section h3{
+  font-size:1.08rem;
+  font-weight:700;
+  margin:26px 0 10px;
+}
+section > p.section-intro{
+  color:var(--text-dim);
+  max-width:70ch;
+  margin:0 0 20px;
+}
+p{max-width:74ch;}
+ul, ol{max-width:74ch; padding-left:1.3em;}
+li{margin-bottom:6px;}
+code{
+  font-family:var(--mono);
+  font-size:.85em;
+  background:var(--surface-2);
+  padding:1px 5px;
+  border-radius:4px;
+}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px 20px;
+  margin:16px 0;
+}
+.card-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:14px;
+  margin:18px 0;
+}
+.stat-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px 18px;
+}
+.stat-card .label{
+  font-size:.72rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-bottom:6px;
+}
+.stat-card .value{
+  font-family:var(--mono);
+  font-size:1.35rem;
+  font-weight:600;
+}
+.stat-card .sub{font-size:.8rem; color:var(--text-dim); margin-top:4px;}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin:16px 0 24px;
+  font-size:.9rem;
+}
+th, td{
+  text-align:left;
+  padding:10px 12px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+th{
+  font-size:.72rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  font-weight:600;
+}
+.table-wrap{overflow-x:auto; margin:16px 0 24px;}
+.table-wrap table{margin:0;}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:var(--mono);
+  font-size:.72rem;
+  padding:2px 9px;
+  border-radius:99px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.pill.sev-critical{background:var(--danger-soft); color:var(--danger);}
+.pill.sev-warning{background:var(--warning-soft); color:var(--warning);}
+.pill.sev-ok{background:var(--success-soft); color:var(--success);}
+.pill.sev-info{background:var(--accent-soft); color:var(--accent);}
+
+.callout{
+  border-left:3px solid var(--accent);
+  background:var(--accent-soft);
+  padding:14px 18px;
+  border-radius:0 8px 8px 0;
+  margin:18px 0;
+}
+.callout.warn{border-left-color:var(--warning); background:var(--warning-soft);}
+.callout.risk{border-left-color:var(--danger); background:var(--danger-soft);}
+.callout .callout-title{
+  font-weight:700;
+  font-size:.82rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  margin-bottom:4px;
+}
+
+.diagram-wrap{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px;
+  margin:18px 0;
+  overflow-x:auto;
+}
+.diagram-wrap .diagram-label{
+  font-size:.72rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-bottom:10px;
+}
+
+.runbook{
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  margin:16px 0 26px;
+}
+.runbook-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:14px 18px;
+  background:var(--surface-2);
+  flex-wrap:wrap;
+}
+.runbook-head h4{margin:0; font-size:.98rem;}
+.runbook-body{padding:16px 18px; background:var(--surface);}
+.runbook-body ol{margin:0; padding-left:1.2em;}
+.runbook-body li{margin-bottom:8px;}
+
+footer.doc-foot{
+  border-top:1px solid var(--border);
+  margin-top:40px;
+  padding-top:20px;
+  color:var(--text-dim);
+  font-size:.82rem;
+}
+
+.mermaid{font-family:var(--sans) !important;}
+
+@media (max-width:480px){
+  .shell{font-size:.97rem;}
+}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<div class="shell">
+  <nav class="toc">
+    <span class="brand">PulsePoll</span>
+    <span class="brand-sub">SRE &amp; SignalR Guide</span>
+
+    <div class="grp">Foundations</div>
+    <a href="#overview">1. Overview</a>
+    <a href="#signalr">2. SignalR primer</a>
+    <a href="#architecture">3. Architecture</a>
+
+    <div class="grp">Behavior</div>
+    <a href="#flows">4. Feature flows</a>
+    <a href="#reliability">5. Reliability targets</a>
+    <a href="#capacity">6. Capacity &amp; scaling</a>
+
+    <div class="grp">Operations</div>
+    <a href="#observability">7. Observability</a>
+    <a href="#runbooks">8. Failure modes &amp; runbooks</a>
+    <a href="#security">9. Security &amp; abuse</a>
+    <a href="#data">10. Data lifecycle</a>
+    <a href="#deploy">11. Deployment checklist</a>
+    <a href="#glossary">12. Glossary</a>
+  </nav>
+
+  <main>
+    <header class="doc-head">
+      <div class="kicker">SRE Reference &middot; Unauthenticated Live Polling</div>
+      <h1>PulsePoll: SignalR Operations Guide</h1>
+      <p class="lede">
+        A basic, unauthenticated live-polling application: an operator starts a poll, participants join with a
+        short poll code and submit answers in real time, and the operator closes the poll. This document explains
+        the SignalR mechanics behind that flow and gives SRE the architecture, targets, and runbooks needed to
+        operate it.
+      </p>
+      <div class="meta-row">
+        <span class="badge">Status: Draft</span>
+        <span class="badge">Owner: SRE / Platform</span>
+        <span class="badge">Auth model: none (poll-code only)</span>
+        <span class="badge">Transport: ASP.NET Core SignalR</span>
+      </div>
+    </header>
+
+    <section id="overview">
+      <h2><span class="num">01</span> Overview</h2>
+      <p class="section-intro">
+        PulsePoll has exactly four operator/participant actions. Everything in this document exists to keep those
+        four actions fast and available under real-time fan-out load.
+      </p>
+      <div class="card-grid">
+        <div class="stat-card">
+          <div class="label">Poll start</div>
+          <div class="value">Operator</div>
+          <div class="sub">Creates a poll, receives a fixed-length join code and question/answer set.</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Poll join</div>
+          <div class="value">Participant</div>
+          <div class="sub">Enters the poll code, joins the poll's real-time group.</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Answering</div>
+          <div class="value">Participant</div>
+          <div class="sub">Selects one predefined option while the poll is open.</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Poll closure</div>
+          <div class="value">Operator</div>
+          <div class="sub">Ends voting; late answers are rejected; results are frozen.</div>
+        </div>
+      </div>
+      <div class="callout">
+        <div class="callout-title">Scope</div>
+        There is no login, no account, and no participant identity beyond a transient connection. This
+        simplifies the app considerably but shifts several concerns &mdash; abuse, rate limiting, poll-code
+        collisions &mdash; onto the infrastructure layer. See <a href="#security">Section 9</a>.
+      </div>
+    </section>
+
+    <section id="signalr">
+      <h2><span class="num">02</span> SignalR primer, applied to PulsePoll</h2>
+      <p class="section-intro">
+        SignalR is the real-time layer that pushes poll state to every connected client without polling. The
+        concepts below are the ones that actually shape PulsePoll's reliability characteristics.
+      </p>
+
+      <h3>Hub</h3>
+      <p>
+        A single <code>PollHub</code> exposes server methods clients invoke (<code>JoinPoll</code>,
+        <code>SubmitAnswer</code>) and pushes client methods the server calls on connections
+        (<code>PollUpdated</code>, <code>PollClosed</code>, <code>AnswerTally</code>). The hub itself is stateless;
+        poll data lives in a separate store so any hub instance can serve any connection.
+      </p>
+
+      <h3>Groups as poll rooms</h3>
+      <p>
+        Each poll code maps to a SignalR <em>group</em>. Joining a poll calls
+        <code>Groups.AddToGroupAsync(connectionId, pollCode)</code>; broadcasting a tally or a close event sends to
+        <code>Clients.Group(pollCode)</code> instead of iterating participants manually. Groups are the mechanism
+        that lets one poll's traffic stay isolated from every other concurrent poll.
+      </p>
+
+      <h3>Transports and negotiation</h3>
+      <p>
+        A SignalR client negotiates the best available transport in order: WebSockets, then Server-Sent Events,
+        then long polling. Corporate proxies and some mobile networks block WebSockets, so a meaningful share of
+        participants (conference Wi-Fi, locked-down corporate networks) will silently fall back to long polling
+        &mdash; higher latency, higher connection count on the load balancer, and more sensitive to idle timeouts.
+        This is a capacity input, not an edge case: assume 5&ndash;15% of a large audience will be on a fallback
+        transport.
+      </p>
+
+      <h3>Connection lifecycle &amp; reconnection</h3>
+      <p>
+        SignalR's automatic reconnect retries the transport on drop but does <strong>not</strong> replay missed
+        group membership or messages. On reconnect, the client gets a new <code>connectionId</code>, which means
+        the app must explicitly re-join the poll group and re-fetch current poll state
+        (<code>GetPollSnapshot</code>) rather than assuming the group membership survived. Skipping this step is
+        the single most common cause of "participant stopped seeing updates" reports.
+      </p>
+
+      <h3>Scale-out: the backplane requirement</h3>
+      <p>
+        With more than one hub instance behind a load balancer, group membership and broadcasts must be shared
+        across instances via a backplane (Redis, or Azure SignalR Service acting as a managed backplane).
+        Without it, a broadcast issued on instance A never reaches a participant whose connection landed on
+        instance B, even though both are in the same poll. This is the top scale-out failure mode and is covered
+        in <a href="#runbooks">Section 8</a>.
+      </p>
+
+      <div class="callout warn">
+        <div class="callout-title">Sticky sessions vs. backplane &mdash; pick one deliberately</div>
+        Either (a) configure the load balancer for sticky sessions so a client's HTTP long-polling requests keep
+        landing on the same instance, <em>and</em> add a backplane for cross-instance group broadcasts, or
+        (b) offload connection management entirely to Azure SignalR Service, which removes the sticky-session
+        requirement from your own load balancer. Running multiple hub instances with neither is the default
+        misconfiguration.
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2><span class="num">03</span> Architecture</h2>
+      <p class="section-intro">
+        Minimal viable topology for an unauthenticated, ephemeral polling app: no auth service, no durable
+        per-user data store, poll state held in a fast shared cache with a short TTL.
+      </p>
+      <div class="diagram-wrap">
+        <div class="diagram-label">Component diagram</div>
+        <pre class="mermaid">
+flowchart LR
+    OP["Operator client"] -- HTTPS / WSS --> LB["Load balancer / reverse proxy"]
+    PA["Participant clients"] -- HTTPS / WSS --> LB
+    LB --> H1["Hub instance A"]
+    LB --> H2["Hub instance B"]
+    H1 <--> BP[("Backplane\n(Redis / Azure SignalR Service)")]
+    H2 <--> BP
+    H1 --> STORE[("Poll state store\nkey: poll code, TTL-bound")]
+    H2 --> STORE
+        </pre>
+      </div>
+
+      <h3>Why poll state sits outside the hub</h3>
+      <p>
+        Hub instances are treated as disposable: a deploy, an autoscale event, or a crash can take one out at any
+        time without losing poll data, because the poll's question, options, tally, and open/closed state live in
+        the shared store keyed by poll code, not in hub memory. Reconnecting clients re-fetch this snapshot rather
+        than relying on in-memory hub state that may no longer exist on whichever instance they land on next.
+      </p>
+
+      <h3>Why a poll code, not a poll ID</h3>
+      <p>
+        The fixed-length poll code is both the join key and the SignalR group name. It needs enough entropy to
+        resist casual guessing (see <a href="#security">Section 9</a>) but stays short enough for a participant to
+        type on a phone keyboard &mdash; typically 5&ndash;6 alphanumeric characters, excluding visually ambiguous
+        characters (0/O, 1/I/l).
+      </p>
+    </section>
+
+    <section id="flows">
+      <h2><span class="num">04</span> Feature flows</h2>
+      <p class="section-intro">
+        The four features as SignalR method calls and group operations.
+      </p>
+
+      <h3>4.1 Start poll</h3>
+      <div class="diagram-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    participant O as Operator
+    participant API as HTTP API
+    participant Store as Poll store
+    participant Hub as PollHub
+
+    O->>API: POST /polls (question, options)
+    API->>Store: create poll {code, status: Open, tally: 0s}, TTL set
+    Store-->>API: pollCode
+    API-->>O: pollCode + operatorToken (session-scoped, not auth)
+    O->>Hub: connect, JoinGroup(pollCode) as operator
+        </pre>
+      </div>
+      <p>
+        Poll creation is a plain HTTP call, not a hub method &mdash; it needs a durable write and a generated code
+        before any real-time connection is useful. The operator's client then opens a SignalR connection and joins
+        the same group participants will use, so it receives live tallies exactly like a participant view.
+      </p>
+
+      <h3>4.2 Join poll</h3>
+      <div class="diagram-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    participant P as Participant
+    participant Hub as PollHub
+    participant Store as Poll store
+
+    P->>Hub: connect
+    P->>Hub: JoinPoll(pollCode)
+    Hub->>Store: lookup(pollCode)
+    alt code valid and poll open
+        Store-->>Hub: poll snapshot
+        Hub->>Hub: Groups.AddToGroupAsync(connId, pollCode)
+        Hub-->>P: PollJoined(question, options, currentTally)
+    else code invalid or poll closed
+        Hub-->>P: JoinRejected(reason)
+    end
+        </pre>
+      </div>
+      <p>
+        <code>JoinPoll</code> is the one hub method that needs an explicit rate limit: it is also the endpoint an
+        attacker would use to brute-force poll codes (Section 9).
+      </p>
+
+      <h3>4.3 Answering</h3>
+      <div class="diagram-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    participant P as Participant
+    participant Hub as PollHub
+    participant Store as Poll store
+    participant Group as Poll group (all clients)
+
+    P->>Hub: SubmitAnswer(pollCode, optionId)
+    Hub->>Store: is poll open? has connId already answered?
+    alt accepted
+        Store->>Store: increment tally[optionId], record connId as answered
+        Hub->>Group: AnswerTally(updatedCounts)
+        Hub-->>P: AnswerAccepted
+    else rejected (closed, duplicate, invalid option)
+        Hub-->>P: AnswerRejected(reason)
+    end
+        </pre>
+      </div>
+      <p>
+        Duplicate-vote prevention is keyed on <code>connectionId</code>, which is the practical ceiling of what an
+        unauthenticated app can enforce: a participant who reconnects gets a new connection ID and can vote again.
+        If exact one-vote-per-person matters more than simplicity, that requires client-side state (e.g. a
+        stored token) or authentication, both out of scope for this basic version &mdash; document this
+        limitation for whoever owns the product decision.
+      </p>
+
+      <h3>4.4 Poll closure</h3>
+      <div class="diagram-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    participant O as Operator
+    participant Hub as PollHub
+    participant Store as Poll store
+    participant Group as Poll group (all clients)
+
+    O->>Hub: ClosePoll(pollCode)
+    Hub->>Store: set status = Closed, freeze tally
+    Hub->>Group: PollClosed(finalTally)
+    Note over Store: TTL continues counting down;<br/>poll purged after retention window
+        </pre>
+      </div>
+      <p>
+        Closing broadcasts to the whole group so any client mid-submission gets <code>PollClosed</code> instead of
+        a silent timeout. The store keeps the closed poll around briefly (retention window, see
+        <a href="#data">Section 10</a>) so late joiners can still see final results before purge.
+      </p>
+    </section>
+
+    <section id="reliability">
+      <h2><span class="num">05</span> Reliability targets</h2>
+      <p class="section-intro">
+        Suggested starting SLIs/SLOs for a basic live-polling workload. Tune against real traffic once observed.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>SLI</th><th>Definition</th><th>Target</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Connection establishment success</td>
+              <td>Successful SignalR negotiate + connect / total attempts</td>
+              <td>&ge; 99.5%</td>
+            </tr>
+            <tr>
+              <td>Join latency</td>
+              <td>Time from <code>JoinPoll</code> call to <code>PollJoined</code> response</td>
+              <td>p95 &lt; 500 ms</td>
+            </tr>
+            <tr>
+              <td>Broadcast fan-out latency</td>
+              <td>Time from an accepted answer to tally update received by all group members</td>
+              <td>p95 &lt; 1 s at 1,000 group members</td>
+            </tr>
+            <tr>
+              <td>Reconnect recovery</td>
+              <td>Reconnect + re-join group + snapshot refresh, end to end</td>
+              <td>p95 &lt; 3 s</td>
+            </tr>
+            <tr>
+              <td>Hub availability</td>
+              <td>Uptime of the SignalR endpoint over rolling 30 days</td>
+              <td>99.9%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <div class="callout-title">Why fan-out latency is the headline metric</div>
+        Unlike a typical CRUD API, PulsePoll's user-visible product <em>is</em> the fan-out speed &mdash; an
+        operator running a live session in front of an audience will notice a tally lagging by seconds far more
+        than they'd notice an individual API call being slow.
+      </div>
+    </section>
+
+    <section id="capacity">
+      <h2><span class="num">06</span> Capacity &amp; scaling</h2>
+      <p class="section-intro">
+        Traffic on this kind of app is bursty and correlated: a poll opening or closing generates a synchronized
+        spike from every connected participant at once, not steady background load.
+      </p>
+
+      <h3>Connection storms</h3>
+      <p>
+        A poll code shared on-screen to a large room produces a join storm within seconds. Size hub instances (or
+        Azure SignalR Service units) for peak concurrent <em>joins per second</em>, not average concurrent
+        connections &mdash; the two differ by an order of magnitude in this workload.
+      </p>
+
+      <h3>Broadcast amplification</h3>
+      <p>
+        Each accepted answer fans out to every group member. Group size, not total connection count, drives
+        per-message cost: a 5,000-person poll broadcasting on every single vote is 5,000 outbound messages per
+        vote. Consider coalescing tally broadcasts (e.g. every 250&ndash;500 ms) instead of one broadcast per vote
+        once group sizes exceed a few hundred, trading a small amount of latency for a large reduction in
+        outbound message volume.
+      </p>
+
+      <div class="card-grid">
+        <div class="stat-card">
+          <div class="label">Self-hosted hub instance</div>
+          <div class="value">~5k&ndash;10k</div>
+          <div class="sub">concurrent connections per instance, WebSocket-dominant traffic, before CPU/memory tuning is needed &mdash; validate against your own hardware.</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Azure SignalR Service</div>
+          <div class="value">1,000 / unit</div>
+          <div class="sub">concurrent connections per Standard unit; scale units horizontally instead of hub instance count.</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Fallback transport share</div>
+          <div class="value">5&ndash;15%</div>
+          <div class="sub">of participants expected on SSE/long-polling depending on audience network (corporate, conference Wi-Fi).</div>
+        </div>
+      </div>
+
+      <h3>Scaling levers, in order of effort</h3>
+      <ol>
+        <li>Coalesce/batch tally broadcasts under high group size.</li>
+        <li>Add backplane capacity (Redis cluster sizing, or additional Azure SignalR Service units) ahead of hub compute &mdash; the backplane is usually the first bottleneck, not the hub CPU.</li>
+        <li>Scale hub instances horizontally behind the load balancer once backplane headroom is confirmed.</li>
+        <li>Pre-warm capacity ahead of known large scheduled sessions rather than relying on reactive autoscaling, given how fast join storms materialize.</li>
+      </ol>
+    </section>
+
+    <section id="observability">
+      <h2><span class="num">07</span> Observability</h2>
+      <p class="section-intro">
+        Minimum instrumentation to detect the failure modes in Section 8 before participants report them.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Type</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>signalr_connections_active</code></td><td>Gauge, per instance</td><td>Detects uneven load distribution across hub instances (sticky-session skew).</td></tr>
+            <tr><td><code>signalr_connections_negotiated_total</code> by transport</td><td>Counter</td><td>Tracks WebSocket vs. SSE vs. long-polling mix; a spike in fallback share often precedes a network-related incident.</td></tr>
+            <tr><td><code>hub_method_duration_seconds</code> by method</td><td>Histogram</td><td>Isolates whether <code>JoinPoll</code>, <code>SubmitAnswer</code>, or <code>ClosePoll</code> is the slow path.</td></tr>
+            <tr><td><code>poll_group_size</code></td><td>Gauge, per poll</td><td>Feeds the broadcast-coalescing decision and flags abnormally large polls for capacity review.</td></tr>
+            <tr><td><code>backplane_publish_latency_seconds</code></td><td>Histogram</td><td>Backplane lag directly becomes fan-out latency; this is the earliest signal of a Redis/Azure SignalR degradation.</td></tr>
+            <tr><td><code>join_rejected_total</code> by reason</td><td>Counter</td><td>A spike in <code>invalid_code</code> rejections is the primary signal for poll-code brute forcing.</td></tr>
+            <tr><td><code>reconnect_total</code> / <code>reconnect_failed_total</code></td><td>Counter</td><td>Distinguishes normal network churn from a systemic connectivity issue.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Logging</h3>
+      <ul>
+        <li>Log <code>connectionId</code>, poll code, and hub instance ID on join/leave/close events for cross-instance tracing.</li>
+        <li>Never log full participant answers alongside any identifying connection metadata beyond what's needed for the duplicate-vote check &mdash; keep logs consistent with the no-PII posture in Section 9.</li>
+        <li>Emit a structured event on every <code>ClosePoll</code> with final tally and total participant count, for post-session review independent of the metrics backend's retention window.</li>
+      </ul>
+      <h3>Health checks</h3>
+      <p>
+        Expose a liveness check on the hub process itself and a separate readiness check that verifies backplane
+        connectivity (a hub that can accept connections but can't reach the backplane should be taken out of the
+        load balancer pool, not marked healthy).
+      </p>
+    </section>
+
+    <section id="runbooks">
+      <h2><span class="num">08</span> Failure modes &amp; runbooks</h2>
+      <p class="section-intro">
+        Ranked by how directly participants notice them.
+      </p>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>Backplane outage or degradation</h4>
+          <span class="pill sev-critical">Critical</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: participants on instance B stop receiving updates broadcast from instance A; single-instance testing looks fine.</li>
+            <li>Check <code>backplane_publish_latency_seconds</code> and backplane infra health (Redis cluster status / Azure SignalR Service status page) first.</li>
+            <li>If backplane is down and cannot be restored quickly, fail over to a single hub instance temporarily (accepting a hard connection-count ceiling) so cross-instance broadcast is no longer required.</li>
+            <li>Once backplane is restored, verify group broadcasts reach all instances before scaling hub instances back up.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>Missing sticky sessions on the load balancer</h4>
+          <span class="pill sev-critical">Critical</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: participants on long-polling transport intermittently disconnect or fail to join; WebSocket clients are largely unaffected.</li>
+            <li>Confirm via <code>signalr_connections_negotiated_total</code> that failures correlate with the SSE/long-polling segment.</li>
+            <li>Verify load balancer session-affinity configuration (cookie- or IP-based, per your LB) routes a client's successive polling requests to the same instance.</li>
+            <li>If using Azure SignalR Service, this class of failure shouldn't occur &mdash; treat its presence as a signal that traffic is bypassing the service.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>Poll-code brute-force / scanning</h4>
+          <span class="pill sev-warning">Warning</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: sustained rise in <code>join_rejected_total{reason="invalid_code"}</code> from a small set of source IPs.</li>
+            <li>Confirm rate limiting is active on <code>JoinPoll</code> (per-connection and per-IP); if not yet implemented, this is the immediate mitigation.</li>
+            <li>Temporarily block or throttle offending source IPs at the load balancer/WAF layer.</li>
+            <li>Escalate to product/security if this recurs &mdash; see Section 9 for structural mitigations (code entropy, throttling design).</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>Thundering herd on a large poll open/close</h4>
+          <span class="pill sev-warning">Warning</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: latency spike on <code>hub_method_duration_seconds</code> correlated with a known large scheduled session starting.</li>
+            <li>Confirm broadcast coalescing is enabled for the affected poll's group size (Section 6).</li>
+            <li>If capacity was not pre-warmed ahead of the session, scale hub/backplane capacity manually rather than waiting on autoscaler reaction time.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>Client stuck after reconnect (stale poll view)</h4>
+          <span class="pill sev-info">Minor</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: individual participant reports or stops seeing tally updates after a network blip; other participants unaffected.</li>
+            <li>Confirm the client re-issues <code>JoinPoll</code> (re-adding to the group) and re-fetches a snapshot on the SignalR <code>onreconnected</code> event, rather than assuming group membership persisted.</li>
+            <li>If this is systemic rather than one participant, check for a recent client build that regressed the reconnect handler.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="security">
+      <h2><span class="num">09</span> Security &amp; abuse, given no authentication</h2>
+      <p class="section-intro">
+        "Unauthenticated" is a product decision with specific, enumerable consequences. These are the ones that
+        matter operationally.
+      </p>
+
+      <div class="callout risk">
+        <div class="callout-title">Poll code is the only access control</div>
+        Anyone with the code can join and answer. Treat code length and character set as a security parameter,
+        not just a UX one: a 5-character alphanumeric code (excluding ambiguous characters) gives roughly 28
+        million combinations &mdash; enough to resist casual guessing but not a sustained scripted scan without
+        rate limiting in front of it.
+      </div>
+
+      <h3>Mitigations to have in place before launch</h3>
+      <ul>
+        <li><strong>Rate limit <code>JoinPoll</code></strong> per connection and per source IP; this is the primary defense against code enumeration, not code length alone.</li>
+        <li><strong>Rate limit <code>SubmitAnswer</code></strong> per connection to prevent a single scripted client from flooding tallies.</li>
+        <li><strong>Validate all inputs server-side</strong> &mdash; option IDs must be checked against the poll's actual option set; never trust a client-supplied tally delta.</li>
+        <li><strong>Expire poll codes</strong> promptly after closure (see Section 10) so a leaked/guessed old code isn't usable indefinitely.</li>
+        <li><strong>No PII by design</strong>: don't collect names, emails, or device identifiers for participants &mdash; the absence of authentication is a feature here, not a gap to patch over with informal tracking.</li>
+        <li><strong>TLS everywhere</strong>: <code>wss://</code>/<code>https://</code> only; poll codes and answers otherwise travel in the clear.</li>
+      </ul>
+
+      <h3>Explicitly out of scope for a basic version</h3>
+      <p>
+        Exactly-once voting per human (rather than per connection), operator identity verification, and audit
+        trails tied to a real participant identity all require authentication or persistent client state that
+        this design deliberately omits. Document this as a known limitation rather than an oversight when this
+        guide is handed to stakeholders.
+      </p>
+    </section>
+
+    <section id="data">
+      <h2><span class="num">10</span> Data lifecycle</h2>
+      <p class="section-intro">
+        Everything here is designed to be short-lived, which simplifies both compliance posture and operational
+        recovery.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Store</th><th>Retention</th></tr></thead>
+          <tbody>
+            <tr><td>Poll definition (question, options)</td><td>Shared cache / store, keyed by poll code</td><td>Lifetime of poll + short grace period after close</td></tr>
+            <tr><td>Live tally</td><td>Same store, in-memory-fast</td><td>Same as poll definition</td></tr>
+            <tr><td>Connection &rarr; answered-option map (dedup)</td><td>Same store or hub-local cache backed by the store</td><td>Same as poll definition; discarded on purge</td></tr>
+            <tr><td>Poll code</td><td>Same store</td><td>Released back to the available pool after purge, with enough delay to avoid immediate reuse confusion</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        No participant-identifying data is retained because none is collected. This keeps the data-lifecycle
+        story simple: a TTL on the poll record is sufficient cleanup, with no separate user-data deletion process
+        required.
+      </p>
+    </section>
+
+    <section id="deploy">
+      <h2><span class="num">11</span> Deployment checklist</h2>
+      <ul>
+        <li>Load balancer configured for either sticky sessions + backplane, or Azure SignalR Service in front of the hub (not neither).</li>
+        <li>Backplane (Redis or Azure SignalR Service) provisioned with headroom above expected peak join-storm rate, not just steady-state connections.</li>
+        <li>TLS terminated correctly for both the initial negotiate HTTP request and the upgraded WebSocket connection.</li>
+        <li>Idle/keepalive timeouts on the load balancer set longer than SignalR's own keepalive interval, so the LB doesn't drop long-polling connections SignalR still considers alive.</li>
+        <li>Rate limiting deployed in front of <code>JoinPoll</code> and <code>SubmitAnswer</code> (Section 9).</li>
+        <li>Health checks wired to readiness (backplane-aware), not just process liveness.</li>
+        <li>Dashboards built against the metrics in Section 7 before go-live, not after the first incident.</li>
+        <li>Capacity pre-warmed ahead of any known large scheduled session.</li>
+      </ul>
+    </section>
+
+    <section id="glossary">
+      <h2><span class="num">12</span> Glossary</h2>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td style="width:180px"><strong>Hub</strong></td><td>The SignalR server-side class exposing methods clients can call and through which the server can call back into connected clients.</td></tr>
+            <tr><td><strong>Group</strong></td><td>A named set of connections a broadcast can target; used here as the per-poll room.</td></tr>
+            <tr><td><strong>Backplane</strong></td><td>Shared infrastructure (Redis, or Azure SignalR Service) that lets multiple hub instances share group membership and broadcasts.</td></tr>
+            <tr><td><strong>Negotiate</strong></td><td>The initial HTTP handshake where a SignalR client and server agree on a transport before upgrading (or falling back).</td></tr>
+            <tr><td><strong>Transport</strong></td><td>The underlying connection mechanism: WebSockets, Server-Sent Events, or long polling, in that fallback order.</td></tr>
+            <tr><td><strong>Sticky session</strong></td><td>Load balancer behavior that routes a given client's successive requests to the same backend instance.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="doc-foot">
+      PulsePoll SRE &amp; SignalR Guide &middot; Draft for review &middot; Update alongside any change to hub methods, group topology, or scale-out configuration.
+    </footer>
+  </main>
+</div>
