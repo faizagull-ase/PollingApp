@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PulsePoll - Participant</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 20px;
+        background: #f5f5f5;
+    }
+
+    h1 {
+        margin-bottom: 5px;
+    }
+
+    .status {
+        padding: 10px;
+        margin: 15px 0;
+        border-radius: 5px;
+        background: #eee;
+    }
+
+    .connected {
+        background: #d4edda;
+    }
+
+    .disconnected {
+        background: #f8d7da;
+    }
+
+    .section {
+        background: white;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+    }
+
+    input {
+        padding: 10px;
+        margin: 5px 5px 5px 0;
+        width: 220px;
+    }
+
+    button {
+        padding: 10px 15px;
+        margin: 5px 0;
+        cursor: pointer;
+        display: block;
+        width: 100%;
+        text-align: left;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    button.selected {
+        background: #cfe2ff;
+        border-color: #6ea8fe;
+    }
+
+    .question-meta {
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 8px;
+    }
+
+    .question-text {
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 12px;
+    }
+
+    .closed-banner {
+        background: #6c757d;
+        color: white;
+        padding: 20px;
+        border-radius: 6px;
+        font-size: 1.3em;
+        font-weight: bold;
+        text-align: center;
+    }
+
+    .feedback {
+        margin-top: 10px;
+        font-size: 0.9em;
+    }
+
+    .feedback.accepted {
+        color: #146c2e;
+    }
+
+    .feedback.rejected {
+        color: #b02a37;
+    }
+
+</style>
+</head>
+<body>
+
+<h1>PulsePoll - Join Poll</h1>
+
+<div id="status" class="status disconnected">Disconnected</div>
+
+<!-- Join -->
+<div class="section">
+    <h2>Join</h2>
+    <input type="text" id="pollCode" placeholder="Poll Code">
+    <button id="joinBtn" style="width: auto; display: inline-block;" onclick="connectAndJoin()">Join Poll</button>
+</div>
+
+<!-- Question -->
+<div class="section">
+    <h2>Question</h2>
+    <div id="questionArea">
+        <p>Not joined yet.</p>
+    </div>
+</div>
+
+<script>
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("https://localhost:7106/hubs/poll")
+        .withAutomaticReconnect()
+        .build();
+
+    let currentPollCode = null;
+    let currentQuestionIndex = null;
+    let hasAnsweredCurrentQuestion = false;
+
+    function log(message) {
+        console.log(message);
+    }
+
+    function updateStatus(message, connected) {
+        const status = document.getElementById("status");
+        status.textContent = message;
+        status.className = connected ? "status connected" : "status disconnected";
+    }
+
+    function renderQuestion(payload) {
+
+        currentQuestionIndex = payload.questionIndex;
+        hasAnsweredCurrentQuestion = false;
+
+        const area = document.getElementById("questionArea");
+
+        const optionsHtml = payload.options.map((option, i) =>
+            `<button onclick="submitAnswer(${i})">${option}</button>`
+        ).join("");
+
+        area.innerHTML = `
+            <div class="question-meta">Question ${payload.questionIndex + 1} of ${payload.questionCount}</div>
+            <div class="question-text">${payload.question}</div>
+            ${optionsHtml}
+            <div id="answerFeedback" class="feedback"></div>
+        `;
+    }
+
+    async function connectAndJoin() {
+
+        const pollCode = document.getElementById("pollCode").value.trim();
+
+        if (!pollCode) {
+            log("Please enter a poll code.");
+            return;
+        }
+
+        try {
+
+            if (connection.state === "Disconnected") {
+                await connection.start();
+                updateStatus("Connected", true);
+                log("Connected to PollHub.");
+            }
+
+            currentPollCode = pollCode;
+
+            await connection.invoke("JoinPoll", pollCode);
+            log(`JoinPoll invoked for poll: ${pollCode}`);
+
+        } catch (error) {
+            updateStatus("Connection failed", false);
+            log("Connect/JoinPoll error: " + error);
+            console.error(error);
+        }
+    }
+
+    async function submitAnswer(optionIndex) {
+
+        if (!currentPollCode || currentQuestionIndex === null || hasAnsweredCurrentQuestion) {
+            return;
+        }
+
+        try {
+            await connection.invoke("SubmitAnswer", currentPollCode, currentQuestionIndex, optionIndex);
+            log(`SubmitAnswer invoked: question=${currentQuestionIndex}, option=${optionIndex}`);
+
+            const buttons = document.querySelectorAll("#questionArea button");
+            buttons.forEach((btn, i) => {
+                btn.disabled = true;
+                if (i === optionIndex) btn.classList.add("selected");
+            });
+
+        } catch (error) {
+            log("SubmitAnswer error: " + error);
+            console.error(error);
+        }
+    }
+
+    // -----------------------------------------
+    // SignalR Event Handlers
+    // -----------------------------------------
+
+    connection.on("PollJoined", (payload) => {
+        log("PollJoined: " + JSON.stringify(payload, null, 2));
+        renderQuestion(payload);
+    });
+
+    connection.on("QuestionChanged", (payload) => {
+        log("QuestionChanged: " + JSON.stringify(payload, null, 2));
+        renderQuestion(payload);
+    });
+
+    connection.on("AnswerAccepted", (payload) => {
+        log("AnswerAccepted: " + JSON.stringify(payload, null, 2));
+        hasAnsweredCurrentQuestion = true;
+
+        const feedback = document.getElementById("answerFeedback");
+        if (feedback) {
+            feedback.textContent = "Your answer was recorded.";
+            feedback.className = "feedback accepted";
+        }
+    });
+
+    connection.on("AnswerRejected", (payload) => {
+        log("AnswerRejected: " + JSON.stringify(payload, null, 2));
+
+        const feedback = document.getElementById("answerFeedback");
+        if (feedback) {
+            feedback.textContent = "Answer not accepted: " + payload.reason;
+            feedback.className = "feedback rejected";
+        }
+    });
+
+    connection.on("PollClosed", (payload) => {
+        log("PollClosed: " + JSON.stringify(payload, null, 2));
+
+        document.getElementById("questionArea").innerHTML =
+            '<div class="closed-banner">Poll closed</div>';
+
+        currentQuestionIndex = null;
+    });
+
+    connection.on("JoinRejected", (payload) => {
+        log("JoinRejected: " + JSON.stringify(payload, null, 2));
+
+        document.getElementById("questionArea").innerHTML =
+            `<p style="color:#b02a37;">Could not join poll: ${payload.reason}</p>`;
+    });
+
+    connection.onreconnecting(() => {
+        updateStatus("Reconnecting...", false);
+        log("Connection lost. Reconnecting...");
+    });
+
+    connection.onreconnected(async () => {
+        updateStatus("Connected", true);
+        log("Reconnected. Re-joining and fetching snapshot...");
+
+        if (currentPollCode) {
+            try {
+                await connection.invoke("JoinPoll", currentPollCode);
+                await connection.invoke("GetPollSnapshot", currentPollCode);
+            } catch (error) {
+                log("Re-join error: " + error);
+            }
+        }
+    });
+
+    connection.on("PollSnapshot", (payload) => {
+        log("PollSnapshot: " + JSON.stringify(payload, null, 2));
+        renderQuestion(payload);
+    });
+
+    connection.onclose(() => {
+        updateStatus("Disconnected", false);
+        log("Connection closed.");
+    });
+
+</script>
+
+</body>
+</html>
