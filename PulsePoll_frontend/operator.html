@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PulsePoll - Operator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 20px;
+        background: #f5f5f5;
+    }
+
+    h1 {
+        margin-bottom: 5px;
+    }
+
+    .status {
+        padding: 10px;
+        margin: 15px 0;
+        border-radius: 5px;
+        background: #eee;
+    }
+
+    .connected {
+        background: #d4edda;
+    }
+
+    .disconnected {
+        background: #f8d7da;
+    }
+
+    .section {
+        background: white;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+    }
+
+    input {
+        padding: 10px;
+        margin: 5px 5px 5px 0;
+        width: 220px;
+    }
+
+    button {
+        padding: 10px 15px;
+        margin: 5px 5px 5px 0;
+        cursor: pointer;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .question-box {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 15px;
+    }
+
+    .question-meta {
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 8px;
+    }
+
+    .question-text {
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .option-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .option-row:last-child {
+        border-bottom: none;
+    }
+
+    .closed-banner {
+        background: #6c757d;
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        font-size: 1.1em;
+        font-weight: bold;
+        text-align: center;
+    }
+
+    .error-text {
+        color: #b02a37;
+    }
+
+    .last-answer {
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 5px;
+        background: #d4edda;
+        color: #146c2e;
+        font-size: 0.95em;
+        min-height: 1.2em;
+    }
+
+    .template-question-box {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .template-question-box input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .template-option-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 4px 0;
+    }
+
+    .template-option-row input[type="text"] {
+        flex: 1;
+        width: auto;
+    }
+
+    .small-btn {
+        padding: 4px 8px;
+        margin: 0;
+        font-size: 0.85em;
+    }
+
+    .checkbox-row {
+        margin: 10px 0;
+    }
+
+    .checkbox-row label {
+        cursor: pointer;
+    }
+
+    .template-status {
+        margin-top: 10px;
+        font-size: 0.9em;
+    }
+
+    .template-status.success {
+        color: #146c2e;
+    }
+
+    .template-status.error {
+        color: #b02a37;
+    }
+
+    .results-question-box {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+
+    .results-question-title {
+        font-weight: bold;
+        margin-bottom: 6px;
+    }
+
+    .results-option-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+    }
+
+    .correct-badge {
+        color: #146c2e;
+        font-weight: bold;
+        margin-left: 6px;
+        font-size: 0.85em;
+    }
+
+</style>
+</head>
+<body>
+
+<h1>PulsePoll - Operator Console</h1>
+
+<div id="status" class="status disconnected">Disconnected</div>
+
+<!-- Generate Questions -->
+<div class="section">
+    <h2>Generate Questions</h2>
+
+    <input type="text" id="templateTitle" placeholder="Poll Title">
+    <div id="templateQuestionsContainer"></div>
+
+    <button type="button" onclick="addTemplateQuestion()">Add Question</button>
+    <button type="button" id="generateBtn" onclick="generateTemplateAndPoll()">Create Template &amp; Start Poll</button>
+
+    <div id="templateStatus" class="template-status"></div>
+</div>
+
+<!-- Connection / Join -->
+<div class="section">
+    <h2>Start Operating</h2>
+
+    <div>
+        <input type="text" id="pollCode" placeholder="Poll Code">
+    </div>
+
+    <button id="connectBtn" onclick="connectAndJoin()">Connect &amp; Join Poll</button>
+</div>
+
+<!-- Current question -->
+<div class="section">
+    <h2>Current Question</h2>
+
+    <div id="questionArea">
+        <p>Not joined yet.</p>
+    </div>
+
+    <div style="margin-top: 15px;">
+        <button id="nextBtn" onclick="nextQuestion()" disabled>Next Question</button>
+        <button id="closeBtn" onclick="closePoll()" disabled>Close Poll</button>
+    </div>
+</div>
+
+<!-- Results -->
+<div class="section">
+    <h2>Results</h2>
+
+    <div id="resultsArea">
+        <p>No results yet.</p>
+    </div>
+</div>
+
+<script>
+
+    const API_BASE_URL = "https://localhost:7106";
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl(`${API_BASE_URL}/hubs/poll`)
+        .withAutomaticReconnect()
+        .build();
+
+    let currentPollCode = null;
+    let currentOptions = [];
+    let lastCounts = null;
+    let questionsHistory = {}; // questionIndex -> { text, options, counts, correctOptionIndex }
+
+    // -----------------------------------------
+    // Generate Questions (client-side template builder)
+    // -----------------------------------------
+
+    let templateQuestions = [
+        { text: "", options: ["", ""], correctOptionIndex: null }
+    ];
+
+    function renderTemplateBuilder() {
+        const container = document.getElementById("templateQuestionsContainer");
+
+        container.innerHTML = templateQuestions.map((question, qIndex) => {
+            const optionsHtml = question.options.map((option, oIndex) => `
+                <div class="template-option-row">
+                    <input
+                        type="text"
+                        placeholder="Option ${oIndex + 1}"
+                        value="${option.replace(/"/g, "&quot;")}"
+                        oninput="updateTemplateOptionText(${qIndex}, ${oIndex}, this.value)"
+                    >
+                    <label>
+                        <input
+                            type="radio"
+                            name="correct-${qIndex}"
+                            ${question.correctOptionIndex === oIndex ? "checked" : ""}
+                            onclick="setTemplateCorrectOption(${qIndex}, ${oIndex})"
+                        > Correct
+                    </label>
+                    ${question.options.length > 2
+                        ? `<button type="button" class="small-btn" onclick="removeTemplateOption(${qIndex}, ${oIndex})">Remove</button>`
+                        : ""}
+                </div>
+            `).join("");
+
+            return `
+                <div class="template-question-box">
+                    <input
+                        type="text"
+                        placeholder="Question ${qIndex + 1} text"
+                        value="${question.text.replace(/"/g, "&quot;")}"
+                        oninput="updateTemplateQuestionText(${qIndex}, this.value)"
+                    >
+                    ${optionsHtml}
+                    <div style="margin-top: 8px;">
+                        ${question.options.length < 4
+                            ? `<button type="button" class="small-btn" onclick="addTemplateOption(${qIndex})">Add Option</button>`
+                            : ""}
+                        ${templateQuestions.length > 1
+                            ? `<button type="button" class="small-btn" onclick="removeTemplateQuestion(${qIndex})">Remove Question</button>`
+                            : ""}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function addTemplateQuestion() {
+        templateQuestions.push({ text: "", options: ["", ""], correctOptionIndex: null });
+        renderTemplateBuilder();
+    }
+
+    function removeTemplateQuestion(qIndex) {
+        templateQuestions.splice(qIndex, 1);
+        renderTemplateBuilder();
+    }
+
+    function updateTemplateQuestionText(qIndex, value) {
+        templateQuestions[qIndex].text = value;
+    }
+
+    function addTemplateOption(qIndex) {
+        templateQuestions[qIndex].options.push("");
+        renderTemplateBuilder();
+    }
+
+    function removeTemplateOption(qIndex, oIndex) {
+        const question = templateQuestions[qIndex];
+        question.options.splice(oIndex, 1);
+
+        if (question.correctOptionIndex === oIndex) {
+            question.correctOptionIndex = null;
+        } else if (question.correctOptionIndex !== null && question.correctOptionIndex > oIndex) {
+            question.correctOptionIndex--;
+        }
+
+        renderTemplateBuilder();
+    }
+
+    function updateTemplateOptionText(qIndex, oIndex, value) {
+        templateQuestions[qIndex].options[oIndex] = value;
+    }
+
+    function setTemplateCorrectOption(qIndex, oIndex) {
+        templateQuestions[qIndex].correctOptionIndex = oIndex;
+    }
+
+    function setTemplateStatus(message, isError) {
+        const status = document.getElementById("templateStatus");
+        status.textContent = message;
+        status.className = "template-status " + (isError ? "error" : "success");
+    }
+
+    async function generateTemplateAndPoll() {
+
+        const title = document.getElementById("templateTitle").value.trim();
+
+        if (!title) {
+            setTemplateStatus("Please enter a poll title.", true);
+            return;
+        }
+
+        for (let i = 0; i < templateQuestions.length; i++) {
+            const q = templateQuestions[i];
+
+            if (!q.text.trim()) {
+                setTemplateStatus(`Question ${i + 1} needs text.`, true);
+                return;
+            }
+
+            const filledOptions = q.options.map(o => o.trim());
+            if (filledOptions.some(o => !o)) {
+                setTemplateStatus(`Question ${i + 1} has an empty option.`, true);
+                return;
+            }
+        }
+
+        const requestBody = {
+            title: title,
+            questions: templateQuestions.map(q => ({
+                text: q.text.trim(),
+                options: q.options.map(o => o.trim()),
+                correctOptionIndex: q.correctOptionIndex,
+            })),
+        };
+
+        const generateBtn = document.getElementById("generateBtn");
+        generateBtn.disabled = true;
+        setTemplateStatus("Creating template...", false);
+
+        try {
+
+            const templateRes = await fetch(`${API_BASE_URL}/api/templates`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!templateRes.ok) {
+                const errorBody = await templateRes.text();
+                throw new Error(`Template creation failed (${templateRes.status}): ${errorBody}`);
+            }
+
+            const template = await templateRes.json();
+            log("Template created: " + JSON.stringify(template, null, 2));
+            setTemplateStatus(`Template "${template.title}" created. Starting poll...`, false);
+
+            const pollRes = await fetch(`${API_BASE_URL}/api/polls`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ templateId: template.id }),
+            });
+
+            if (!pollRes.ok) {
+                const errorBody = await pollRes.text();
+                throw new Error(`Poll creation failed (${pollRes.status}): ${errorBody}`);
+            }
+
+            const poll = await pollRes.json();
+            log("Poll started: " + JSON.stringify(poll, null, 2));
+            setTemplateStatus(`Poll started with code ${poll.pollCode}. Joining...`, false);
+
+            document.getElementById("pollCode").value = poll.pollCode;
+            await connectAndJoin();
+
+        } catch (error) {
+            log("Generate template/poll error: " + error);
+            setTemplateStatus(error.message || String(error), true);
+        } finally {
+            generateBtn.disabled = false;
+        }
+    }
+
+    function log(message) {
+        console.log(message);
+    }
+
+    function updateStatus(message, connected) {
+        const status = document.getElementById("status");
+        status.textContent = message;
+        status.className = connected ? "status connected" : "status disconnected";
+    }
+
+    function setOperatorControlsEnabled(enabled) {
+        document.getElementById("nextBtn").disabled = !enabled;
+        document.getElementById("closeBtn").disabled = !enabled;
+    }
+
+    function renderResults() {
+        const area = document.getElementById("resultsArea");
+        const indexes = Object.keys(questionsHistory).map(Number).sort((a, b) => a - b);
+
+        if (indexes.length === 0) {
+            area.innerHTML = "<p>No results yet.</p>";
+            return;
+        }
+
+        area.innerHTML = indexes.map(index => {
+            const entry = questionsHistory[index];
+
+            const optionsHtml = entry.options.map((option, i) => {
+                const count = entry.counts[i] ?? 0;
+                const isCorrect = entry.correctOptionIndex === i;
+                return `
+                    <div class="results-option-row">
+                        <span>${option}${isCorrect ? '<span class="correct-badge">Correct</span>' : ""}</span>
+                        <span>${count}</span>
+                    </div>
+                `;
+            }).join("");
+
+            return `
+                <div class="results-question-box">
+                    <div class="results-question-title">Question ${index + 1}: ${entry.text}</div>
+                    ${optionsHtml}
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderQuestion(payload) {
+        const area = document.getElementById("questionArea");
+
+        const isLastQuestion = payload.questionIndex >= payload.questionCount - 1;
+
+        currentOptions = payload.options;
+        lastCounts = Array.isArray(payload.currentTally)
+            ? payload.currentTally.slice()
+            : new Array(payload.options.length).fill(0);
+
+        const optionsHtml = payload.options.map((option, i) => {
+            const count = lastCounts[i] ?? 0;
+            return `<div class="option-row"><span>${option}</span><span>${count}</span></div>`;
+        }).join("");
+
+        area.innerHTML = `
+            <div class="question-box">
+                <div class="question-meta">Question ${payload.questionIndex + 1} of ${payload.questionCount}</div>
+                <div class="question-text">${payload.question}</div>
+                ${optionsHtml}
+                <div id="lastAnswer" class="last-answer"></div>
+            </div>
+        `;
+
+        document.getElementById("nextBtn").disabled = isLastQuestion;
+        document.getElementById("closeBtn").disabled = false;
+
+        questionsHistory[payload.questionIndex] = {
+            text: payload.question,
+            options: payload.options,
+            counts: lastCounts.slice(),
+            correctOptionIndex: questionsHistory[payload.questionIndex]?.correctOptionIndex ?? null,
+        };
+        renderResults();
+    }
+
+    async function connectAndJoin() {
+
+        const pollCode = document.getElementById("pollCode").value.trim();
+
+        if (!pollCode) {
+            log("Please enter a poll code.");
+            return;
+        }
+
+        if (pollCode !== currentPollCode) {
+            questionsHistory = {};
+            renderResults();
+        }
+
+        try {
+
+            if (connection.state === "Disconnected") {
+                await connection.start();
+                updateStatus("Connected", true);
+                log("Connected to PollHub.");
+            }
+
+            currentPollCode = pollCode;
+
+            await connection.invoke("JoinPoll", pollCode);
+            log(`JoinPoll invoked for poll: ${pollCode}`);
+
+        } catch (error) {
+            updateStatus("Connection failed", false);
+            log("Connect/JoinPoll error: " + error);
+            console.error(error);
+        }
+    }
+
+    async function nextQuestion() {
+        if (!currentPollCode) return;
+
+        try {
+            await connection.invoke("NextQuestion", currentPollCode);
+            log("NextQuestion invoked.");
+        } catch (error) {
+            log("NextQuestion error: " + error);
+            console.error(error);
+        }
+    }
+
+    async function closePoll() {
+        if (!currentPollCode) return;
+
+        try {
+            await connection.invoke("ClosePoll", currentPollCode);
+            log("ClosePoll invoked.");
+        } catch (error) {
+            log("ClosePoll error: " + error);
+            console.error(error);
+        }
+    }
+
+    // -----------------------------------------
+    // SignalR Event Handlers
+    // -----------------------------------------
+
+    connection.on("PollJoined", (payload) => {
+        log("PollJoined: " + JSON.stringify(payload, null, 2));
+        renderQuestion(payload);
+    });
+
+    connection.on("QuestionChanged", (payload) => {
+        log("QuestionChanged: " + JSON.stringify(payload, null, 2));
+        renderQuestion(payload);
+    });
+
+    connection.on("AnswerTally", (payload) => {
+        log("AnswerTally: " + JSON.stringify(payload, null, 2));
+
+        const rows = document.querySelectorAll("#questionArea .option-row span:last-child");
+        payload.counts.forEach((count, i) => {
+            if (rows[i]) rows[i].textContent = count;
+        });
+
+        // Diff against the previous counts to tell which option the latest answer picked.
+        if (lastCounts) {
+            const answeredIndex = payload.counts.findIndex((count, i) => count > (lastCounts[i] ?? 0));
+
+            if (answeredIndex !== -1) {
+                const lastAnswer = document.getElementById("lastAnswer");
+                if (lastAnswer) {
+                    lastAnswer.textContent = `Answer recorded: ${currentOptions[answeredIndex] ?? "Option " + (answeredIndex + 1)}`;
+                }
+            }
+        }
+
+        lastCounts = payload.counts.slice();
+
+        if (questionsHistory[payload.questionIndex]) {
+            questionsHistory[payload.questionIndex].counts = lastCounts.slice();
+        }
+        renderResults();
+    });
+
+    connection.on("PollClosed", (payload) => {
+        log("PollClosed: " + JSON.stringify(payload, null, 2));
+
+        document.getElementById("questionArea").innerHTML =
+            '<div class="closed-banner">Poll closed</div>';
+
+        setOperatorControlsEnabled(false);
+
+        // finalTally/perQuestionCorrect cover every question, even ones this connection never rendered.
+        payload.finalTally.forEach((counts, index) => {
+            const existing = questionsHistory[index];
+            questionsHistory[index] = {
+                text: existing?.text ?? `Question ${index + 1}`,
+                options: existing?.options ?? counts.map((_, i) => `Option ${i + 1}`),
+                counts: counts,
+                correctOptionIndex: payload.perQuestionCorrect?.[index] ?? null,
+            };
+        });
+        renderResults();
+    });
+
+    connection.on("JoinRejected", (payload) => {
+        log("JoinRejected: " + JSON.stringify(payload, null, 2));
+        document.getElementById("questionArea").innerHTML =
+            `<p class="error-text">Could not join poll: ${payload.reason}</p>`;
+    });
+
+    connection.on("OperatorRejected", (payload) => {
+        log("OperatorRejected: " + JSON.stringify(payload, null, 2));
+    });
+
+    connection.onreconnecting(() => {
+        updateStatus("Reconnecting...", false);
+        log("Connection lost. Reconnecting...");
+    });
+
+    connection.onreconnected(async () => {
+        updateStatus("Connected", true);
+        log("Reconnected. Re-joining...");
+
+        if (currentPollCode) {
+            try {
+                await connection.invoke("JoinPoll", currentPollCode);
+            } catch (error) {
+                log("Re-join error: " + error);
+            }
+        }
+    });
+
+    connection.onclose(() => {
+        updateStatus("Disconnected", false);
+        log("Connection closed.");
+        setOperatorControlsEnabled(false);
+    });
+
+    renderTemplateBuilder();
+
+</script>
+
+</body>
+</html>
