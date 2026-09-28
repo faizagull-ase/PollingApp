@@ -103,4 +103,4 @@ These are accepted for a practice project, not gaps to fix unless the project's 
 
 ---
 
-*PulsePoll requirements reference · reflects code as of the current commit · update this doc alongside any change to endpoints, hub methods, or the data model.*
+
