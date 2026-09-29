@@ -1,6 +1,7 @@
+using Microsoft.AspNetCore.Http;
 using PulsePoll.Data.Repositories;
-using PulsePoll.Exceptions;
 using PulsePoll.Models.Cache;
+using PulsePoll.Models.Common;
 using PulsePoll.Models.Dtos.Polls;
 using PulsePoll.Models.Entities;
 using PulsePoll.Services.Caching;
@@ -30,7 +31,7 @@ public class PollService : IPollService
         _logger = logger;
     }
 
-    public async Task<PollResponse> CreatePollAsync(CreatePollRequest request)
+    public async Task<ServiceResult<PollResponse>> CreatePollAsync(CreatePollRequest request)
     {
         Template? template;
         try
@@ -40,19 +41,19 @@ public class PollService : IPollService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load template {TemplateId} for poll creation", request.TemplateId);
-            throw;
+            return ServiceResult<PollResponse>.Fail("An unexpected error occurred.", StatusCodes.Status500InternalServerError);
         }
 
-        // Not-found/validation failures are a request/response concern - let them
-        // propagate to ExceptionHandlingMiddleware, which maps them to HTTP 404/400.
         if (template is null)
         {
-            throw new NotFoundException($"Template {request.TemplateId} was not found.");
+            _logger.LogWarning("Template {TemplateId} was not found for poll creation", request.TemplateId);
+            return ServiceResult<PollResponse>.Fail($"Template {request.TemplateId} was not found.", StatusCodes.Status404NotFound);
         }
 
         if (template.Questions.Count == 0)
         {
-            throw new ValidationException("Template has no questions.");
+            _logger.LogWarning("Template {TemplateId} has no questions", request.TemplateId);
+            return ServiceResult<PollResponse>.Fail("Template has no questions.", StatusCodes.Status400BadRequest);
         }
 
         var pollCode = _codeGenerator.Generate();
@@ -91,18 +92,20 @@ public class PollService : IPollService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save poll {PollCode} for template {TemplateId}", pollCode, request.TemplateId);
-            throw;
+            return ServiceResult<PollResponse>.Fail("An unexpected error occurred.", StatusCodes.Status500InternalServerError);
         }
 
         poll.PollId = dbPoll.Id;
 
         _cacheStore.Set(poll);
 
-        return new PollResponse
+        var response = new PollResponse
         {
             PollCode = pollCode,
             QuestionCount = poll.Questions.Count
         };
+
+        return ServiceResult<PollResponse>.Ok(response, StatusCodes.Status201Created);
     }
 
     public JoinPollResult Join(string pollCode)

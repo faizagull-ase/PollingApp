@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using PulsePoll.Exceptions;
 using PulsePoll.Models.Dtos.Polls;
 using PulsePoll.Services.Polls;
 
@@ -10,31 +9,22 @@ namespace PulsePoll.Controllers;
 public class PollsController : ControllerBase
 {
     private readonly IPollService _pollService;
-    private readonly ILogger<PollsController> _logger;
 
-    public PollsController(IPollService pollService, ILogger<PollsController> logger)
+    public PollsController(IPollService pollService)
     {
         _pollService = pollService;
-        _logger = logger;
     }
 
     [HttpPost]
     public async Task<ActionResult<PollResponse>> Create([FromBody] CreatePollRequest request)
     {
-        try
+        var result = await _pollService.CreatePollAsync(request);
+
+        if (!result.Success)
         {
-            var response = await _pollService.CreatePollAsync(request);
-            return CreatedAtAction(nameof(Create), new { pollCode = response.PollCode }, response);
+            return StatusCode(result.StatusCode, new { error = result.Error });
         }
-        catch (ApiException ex)
-        {
-            _logger.LogWarning(ex, "API exception: {Message}", ex.Message);
-            return StatusCode(ex.StatusCode, new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unhandled exception creating poll");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An unexpected error occurred." });
-        }
+
+        return StatusCode(result.StatusCode, result.Data);
     }
 }

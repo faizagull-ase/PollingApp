@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http;
 using PulsePoll.Data.Repositories;
+using PulsePoll.Models.Common;
 using PulsePoll.Models.Dtos.Templates;
 using PulsePoll.Models.Entities;
 using PulsePoll.Validation;
@@ -21,11 +23,17 @@ public class TemplateService : ITemplateService
         _logger = logger;
     }
 
-    public async Task<TemplateResponse> CreateAsync(CreateTemplateRequest request)
+    public async Task<ServiceResult<TemplateResponse>> CreateAsync(CreateTemplateRequest request)
     {
-        // Validation failures are a request/response concern - let them propagate
-        // to ExceptionHandlingMiddleware, which maps ValidationException to HTTP 400.
-        _validator.Validate(request);
+        try
+        {
+            _validator.Validate(request);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Validation failed: {Message}", ex.Message);
+            return ServiceResult<TemplateResponse>.Fail(ex.Message, StatusCodes.Status400BadRequest);
+        }
 
         var template = new Template
         {
@@ -48,15 +56,17 @@ public class TemplateService : ITemplateService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save template {Title}", request.Title);
-            throw;
+            return ServiceResult<TemplateResponse>.Fail("An unexpected error occurred.", StatusCodes.Status500InternalServerError);
         }
 
-        return new TemplateResponse
+        var response = new TemplateResponse
         {
             Id = created.Id,
             Title = created.Title,
             QuestionCount = created.Questions.Count,
             CreatedAt = created.CreatedAt
         };
+
+        return ServiceResult<TemplateResponse>.Ok(response, StatusCodes.Status201Created);
     }
 }
