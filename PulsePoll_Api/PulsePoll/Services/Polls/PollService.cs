@@ -32,8 +32,23 @@ public class PollService : IPollService
 
     public async Task<PollResponse> CreatePollAsync(CreatePollRequest request)
     {
-        var template = await _templateRepository.GetByIdAsync(request.TemplateId)
-            ?? throw new NotFoundException($"Template {request.TemplateId} was not found.");
+        Template? template;
+        try
+        {
+            template = await _templateRepository.GetByIdAsync(request.TemplateId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load template {TemplateId} for poll creation", request.TemplateId);
+            throw;
+        }
+
+        // Not-found/validation failures are a request/response concern - let them
+        // propagate to ExceptionHandlingMiddleware, which maps them to HTTP 404/400.
+        if (template is null)
+        {
+            throw new NotFoundException($"Template {request.TemplateId} was not found.");
+        }
 
         if (template.Questions.Count == 0)
         {
@@ -61,14 +76,24 @@ public class PollService : IPollService
                 .ToList()
         };
 
-        var dbPoll = await _pollRepository.CreateAsync(new Poll
+        Poll dbPoll;
+        try
         {
-            PollCode = pollCode,
-            TemplateId = template.Id,
-            Status = PollStatus.Open,
-            CurrentQuestionIndex = 0,
-            CreatedAt = poll.CreatedAt
-        });
+            dbPoll = await _pollRepository.CreateAsync(new Poll
+            {
+                PollCode = pollCode,
+                TemplateId = template.Id,
+                Status = PollStatus.Open,
+                CurrentQuestionIndex = 0,
+                CreatedAt = poll.CreatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save poll {PollCode} for template {TemplateId}", pollCode, request.TemplateId);
+            throw;
+        }
+
         poll.PollId = dbPoll.Id;
 
         _cacheStore.Set(poll);

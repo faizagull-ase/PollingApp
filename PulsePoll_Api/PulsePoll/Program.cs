@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using PulsePoll.Data;
 using PulsePoll.Data.Repositories;
 using PulsePoll.Hubs;
-using PulsePoll.Middleware;
 using PulsePoll.Services.Caching;
 using PulsePoll.Services.PollCodes;
 using PulsePoll.Services.Polls;
@@ -48,8 +47,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseCors(SignalRClientCorsPolicy);
 

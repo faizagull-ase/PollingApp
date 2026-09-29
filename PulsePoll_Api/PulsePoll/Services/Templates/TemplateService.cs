@@ -9,15 +9,22 @@ public class TemplateService : ITemplateService
 {
     private readonly ITemplateRepository _templateRepository;
     private readonly TemplateValidator _validator;
+    private readonly ILogger<TemplateService> _logger;
 
-    public TemplateService(ITemplateRepository templateRepository, TemplateValidator validator)
+    public TemplateService(
+        ITemplateRepository templateRepository,
+        TemplateValidator validator,
+        ILogger<TemplateService> logger)
     {
         _templateRepository = templateRepository;
         _validator = validator;
+        _logger = logger;
     }
 
     public async Task<TemplateResponse> CreateAsync(CreateTemplateRequest request)
     {
+        // Validation failures are a request/response concern - let them propagate
+        // to ExceptionHandlingMiddleware, which maps ValidationException to HTTP 400.
         _validator.Validate(request);
 
         var template = new Template
@@ -33,7 +40,16 @@ public class TemplateService : ITemplateService
             }).ToList()
         };
 
-        var created = await _templateRepository.AddAsync(template);
+        Template created;
+        try
+        {
+            created = await _templateRepository.AddAsync(template);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save template {Title}", request.Title);
+            throw;
+        }
 
         return new TemplateResponse
         {
