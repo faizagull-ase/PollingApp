@@ -1,0 +1,34 @@
+@{
+    ViewData["Title"] = "PulsePoll — Join";
+}
+
+@section Styles {
+  <link rel="stylesheet" href="~/css/participant.css">
+}
+
+<div class="wrap">
+  <h1>PulsePoll</h1>
+  <p class="sub">Enter the poll code your operator shared.</p>
+
+  <div class="card" id="join-card">
+    <label>Poll code</label>
+    <input type="text" id="code-input" placeholder="e.g. 7F3KQ" maxlength="6">
+    <button type="button" id="join-btn">Join poll</button>
+    <div class="msg error hidden" id="join-error"></div>
+  </div>
+
+  <div class="card hidden" id="question-card">
+    <div class="question-count" id="question-count"></div>
+    <h2 id="question-text"></h2>
+    <div id="options-container"></div>
+    <div class="msg hidden" id="answer-msg"></div>
+  </div>
+
+  <div class="card hidden" id="closed-card">
+    <div class="closed-banner">This poll has closed.</div>
+  </div>
+</div>
+
+@section Scripts {
+  <script src="~/js/participant.js"></script>
+}

@@ -1,0 +1,19 @@
+@{
+    ViewData["Title"] = "PulsePoll";
+}
+<div class="wrap">
+  <h1>PulsePoll</h1>
+  <p class="sub">Real-time live polling.</p>
+
+  <div class="card">
+    <h2>Operator</h2>
+    <p>Build a poll, share the code, drive it live.</p>
+    <a href="@Url.Action("Index", "Operator")"><button type="button">Go to operator view</button></a>
+  </div>
+
+  <div class="card">
+    <h2>Participant</h2>
+    <p>Join a poll with a code and answer questions live.</p>
+    <a href="@Url.Action("Join", "Participant")"><button type="button">Join a poll</button></a>
+  </div>
+</div>

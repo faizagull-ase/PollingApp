@@ -1,0 +1,22 @@
+@inject IOptions<PulsePollOptions> Options
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@ViewData["Title"]</title>
+<link rel="stylesheet" href="~/css/site.css">
+@await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+@RenderBody()
+
+<script>
+  window.appConfig = {
+    hubUrl: "@Options.Value.HubUrl"
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@@Options.Value.SignalRClientVersion/dist/browser/signalr.min.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
