@@ -27,14 +27,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(SignalRClientCorsPolicy, policy =>
     {
-        policy.WithOrigins(builder.Configuration["Cors:SignalRClient"] ?? "http://127.0.0.1:5500")
+        policy.WithOrigins(builder.Configuration["Cors:SignalRClient"])
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyMethod();
     });
 });
 
 builder.Services.AddScoped<ITemplateRepository, TemplateRepository>();
+builder.Services.AddScoped<IPollRepository, PollRepository>();
 builder.Services.AddScoped<ITemplateService, TemplateService>();
 builder.Services.AddScoped<IPollService, PollService>();
 builder.Services.AddSingleton<IPollCacheStore, MemoryPollCacheStore>();
@@ -51,8 +51,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-app.UseHttpsRedirection();
-
 app.UseCors(SignalRClientCorsPolicy);
 
 app.UseAuthorization();
@@ -60,6 +58,5 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<PollHub>("/hubs/poll");
 
-// TODO: add rate limiting for JoinPoll, SubmitAnswer, and template upload (spec section 5).
 
 app.Run();

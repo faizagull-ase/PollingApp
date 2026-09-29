@@ -49,8 +49,8 @@ There is no list/get/update/delete for templates and no template file-upload flo
 |---|---|
 | `JoinPoll(pollCode)` | Adds the connection to the poll's SignalR group; returns the current question/options/tally, or a rejection if the code is invalid/poll is closed. |
 | `SubmitAnswer(pollCode, questionIndex, optionIndex)` | Records a vote if the poll is open and this connection hasn't already answered this question; broadcasts the updated tally to the group. |
-| `NextQuestion(pollCode)` | Advances to the next question and broadcasts it to the group. |
-| `ClosePoll(pollCode)` | Marks the poll closed and broadcasts the final tally. |
+| `NextQuestion(pollCode)` | Advances to the next question and broadcasts it to the group. Also persists the outgoing question's final tally to SQL Server (best-effort — a DB failure is logged, not surfaced to the caller). |
+| `ClosePoll(pollCode)` | Marks the poll closed and broadcasts the final tally. Also persists any question not yet written (best-effort) and marks the poll's SQL Server row closed. |
 | `GetPollSnapshot(pollCode)` | Returns current poll state — used by clients to resync (e.g. after a page refresh). |
 
 There are no `OnConnectedAsync`/`OnDisconnectedAsync` overrides — reconnects are handled entirely by the client re-calling `JoinPoll` + `GetPollSnapshot`, not by any server-side session recovery.
@@ -59,12 +59,12 @@ There are no `OnConnectedAsync`/`OnDisconnectedAsync` overrides — reconnects a
 
 ## 4. Data model & persistence
 
-Two tiers, and only two:
+- **SQL Server (via EF Core)** — `Template` (Id, Title, CreatedAt) and `Question` (Id, TemplateId, Order, Text, Options as JSON, optional CorrectOptionIndex), plus two new tables added alongside them:
+  - `Poll` (Id, PollCode, TemplateId, Status, CurrentQuestionIndex, CreatedAt, ClosedAt) — one row written when a poll is created, updated when it's closed.
+  - `PollQuestionResult` (Id, PollId, QuestionIndex, Text, Options as JSON, optional CorrectOptionIndex, Tally as JSON) — one row per question, written when the operator advances past it (`NextQuestion`) or when the poll closes, whichever comes first.
+- **In-memory cache (`IMemoryCache`, single process, 24h TTL)** — everything about a *running* poll: current question, open/closed status, live tallies, and the set of connection IDs that have already answered each question. This remains the only thing `SubmitAnswer` touches — vote-level writes never hit SQL Server, only the create/advance/close checkpoints do.
 
-- **SQL Server (via EF Core)** — `Template` (Id, Title, CreatedAt) and `Question` (Id, TemplateId, Order, Text, Options as JSON, optional CorrectOptionIndex). This is the only durable data in the system.
-- **In-memory cache (`IMemoryCache`, single process, 24h TTL)** — everything about a *running* poll: current question, open/closed status, live tallies, and the set of connection IDs that have already answered each question. This is created fresh from a template when a poll starts and is not written back to SQL.
-
-There is no persisted answer/response history — once a poll closes or the app restarts, only the final tally that was broadcast at close is what anyone saw; nothing is stored for later reporting.
+A poll's final results are now durable: they persist past the cache's 24h TTL and past an app restart, in `Poll`/`PollQuestionResult`. There's no reporting endpoint yet to read them back through the API — the tables exist, but nothing queries them besides the write path itself.
 
 ---
 
@@ -96,7 +96,8 @@ These are accepted for a practice project, not gaps to fix unless the project's 
 
 - **No operator authentication** — anyone with the poll code can advance questions or close the poll.
 - **No exactly-once voting per person** — dedup is per SignalR connection, so a reconnecting participant can vote again.
-- **No persisted reporting** — tallies live only in memory while the poll runs; nothing is saved for after-the-fact analysis beyond the final tally shown at close.
+- **No reporting endpoint** — poll results are now persisted to SQL Server (`Poll`/`PollQuestionResult`), but nothing in the API reads them back; retrieving past poll results means querying the database directly.
+- **No retry on a failed persistence write** — `NextQuestion`/`ClosePoll` log and swallow a SQL Server failure rather than blocking the live poll; a transient DB outage can leave a question's result permanently missing from the durable record.
 - **No rate limiting, health checks, or metrics** — none implemented.
 - **Single-process only** — poll state is in local memory cache, so it wouldn't survive multiple app instances or a restart.
 - **Template management is create-only** — no editing, listing, or deleting templates from the API.

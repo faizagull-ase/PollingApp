@@ -56,7 +56,7 @@ public class PollHub : Hub
 
     public async Task NextQuestion(string pollCode)
     {
-        var result = _pollService.NextQuestion(pollCode);
+        var result = await _pollService.NextQuestion(pollCode);
 
         if (!result.Success)
         {
@@ -74,7 +74,7 @@ public class PollHub : Hub
 
     public async Task ClosePoll(string pollCode)
     {
-        var result = _pollService.ClosePoll(pollCode);
+        var result = await _pollService.ClosePoll(pollCode);
 
         if (!result.Success)
         {

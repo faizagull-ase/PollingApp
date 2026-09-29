@@ -22,6 +22,7 @@ public class PollQuestionState
 public class PollState
 {
     public string PollCode { get; set; } = string.Empty;
+    public int? PollId { get; set; }
     public int TemplateId { get; set; }
     public PollStatus Status { get; set; } = PollStatus.Open;
     public int CurrentQuestionIndex { get; set; }

@@ -259,7 +259,7 @@ document.getElementById("create-poll-btn").addEventListener("click", async () =>
   }
   for (const q of payload.questions) {
     if (!q.text) { showError(setupError, "Every question needs text."); return; }
-    if (q.options.length < 2) { showError(setupError, "Every question needs at least 2 options."); return; }
+    if (q.options.length < 2 || q.options.length > 4) { showError(setupError, "Every question must have between 2 and 4 options."); return; }
     if (q.options.some(o => !o)) { showError(setupError, "Options cannot be empty."); return; }
   }
 

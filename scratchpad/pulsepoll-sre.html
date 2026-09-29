@@ -384,6 +384,7 @@ footer.doc-foot{
         <span class="badge">Owner: SRE / Platform</span>
         <span class="badge">Auth model: none (poll-code only)</span>
         <span class="badge">Transport: ASP.NET Core SignalR</span>
+        <span class="badge">Persistence: cache + SQL Server</span>
       </div>
     </header>
 
@@ -487,8 +488,9 @@ footer.doc-foot{
     <section id="architecture">
       <h2><span class="num">03</span> Architecture</h2>
       <p class="section-intro">
-        Minimal viable topology for an unauthenticated, ephemeral polling app: no auth service, no durable
-        per-user data store, poll state held in a fast shared cache with a short TTL.
+        No auth service, no per-user data store. Poll state lives in a fast shared cache with a short TTL for the
+        real-time path; a SQL Server database now holds a durable copy of poll metadata and per-question results
+        alongside it, written at creation, question advance, and close.
       </p>
       <div class="diagram-wrap">
         <div class="diagram-label">Component diagram</div>
@@ -502,6 +504,8 @@ flowchart LR
     H2 <--> BP
     H1 --> STORE[("Poll state store\nkey: poll code, TTL-bound")]
     H2 --> STORE
+    H1 -. create / advance / close .-> SQL[("SQL Server\nPolls + PollQuestionResults")]
+    H2 -. create / advance / close .-> SQL
         </pre>
       </div>
 
@@ -511,6 +515,16 @@ flowchart LR
         time without losing poll data, because the poll's question, options, tally, and open/closed state live in
         the shared store keyed by poll code, not in hub memory. Reconnecting clients re-fetch this snapshot rather
         than relying on in-memory hub state that may no longer exist on whichever instance they land on next.
+      </p>
+
+      <h3>Why two stores instead of one</h3>
+      <p>
+        The cache store stays the source of truth for the live, in-flight poll &mdash; every vote and hub read hits
+        it, and it is untouched by the SQL Server addition. SQL Server is a durable, append-mostly copy written at
+        three checkpoints only (poll create, question advance, poll close), not on every vote: it exists so results
+        survive an app restart or the cache's 24h TTL, and so a poll's history can be queried after the fact. See
+        <a href="#flows">Section 4</a> for exactly what each checkpoint writes and <a href="#data">Section 10</a>
+        for retention.
       </p>
 
       <h3>Why a poll code, not a poll ID</h3>
@@ -534,10 +548,13 @@ flowchart LR
 sequenceDiagram
     participant O as Operator
     participant API as HTTP API
+    participant SQL as SQL Server
     participant Store as Poll store
     participant Hub as PollHub
 
-    O->>API: POST /polls (question, options)
+    O->>API: POST /polls (templateId)
+    API->>SQL: insert Poll {code, status: Open, questionIndex: 0}
+    SQL-->>API: pollId
     API->>Store: create poll {code, status: Open, tally: 0s}, TTL set
     Store-->>API: pollCode
     API-->>O: pollCode + operatorToken (session-scoped, not auth)
@@ -546,8 +563,11 @@ sequenceDiagram
       </div>
       <p>
         Poll creation is a plain HTTP call, not a hub method &mdash; it needs a durable write and a generated code
-        before any real-time connection is useful. The operator's client then opens a SignalR connection and joins
-        the same group participants will use, so it receives live tallies exactly like a participant view.
+        before any real-time connection is useful. The <code>Poll</code> row is written to SQL Server before the
+        cache entry, and a failure here fails the whole request: creation is the one checkpoint where a persistence
+        failure is meant to be user-visible, since it's low-frequency and one-shot. The operator's client then
+        opens a SignalR connection and joins the same group participants will use, so it receives live tallies
+        exactly like a participant view.
       </p>
 
       <h3>4.2 Join poll</h3>
@@ -602,26 +622,66 @@ sequenceDiagram
         stored token) or authentication, both out of scope for this basic version &mdash; document this
         limitation for whoever owns the product decision.
       </p>
+      <div class="callout">
+        <div class="callout-title">Answering stays cache-only, by design</div>
+        <code>SubmitAnswer</code> never writes to SQL Server &mdash; it is the highest-frequency hub method, and a
+        DB round trip on every vote would put database latency directly on the real-time path. Per-question tallies
+        reach SQL Server only when the operator advances past that question (below) or closes the poll.
+      </div>
 
-      <h3>4.4 Poll closure</h3>
+      <h3>4.4 Advance to next question</h3>
       <div class="diagram-wrap">
         <pre class="mermaid">
 sequenceDiagram
     participant O as Operator
     participant Hub as PollHub
     participant Store as Poll store
+    participant SQL as SQL Server
+    participant Group as Poll group (all clients)
+
+    O->>Hub: NextQuestion(pollCode)
+    Hub->>Store: advance CurrentQuestionIndex
+    Hub->>SQL: insert PollQuestionResult for the outgoing question (best effort)
+    Note over SQL: failure is logged and swallowed;<br/>live flow is never blocked or rolled back
+    Hub->>Group: QuestionChanged(next question)
+        </pre>
+      </div>
+      <p>
+        The outgoing question's final tally, text, options, and correct-option index are snapshotted into
+        <code>PollQuestionResults</code> the moment the operator moves past it. This write is wrapped so a
+        transient SQL Server failure is logged, not surfaced to the operator or the group &mdash; the trade-off is
+        that a failure here means that one question's row is permanently missing from the durable record, with no
+        retry. See the <a href="#runbooks">persistence-failure runbook</a> in Section 8.
+      </p>
+
+      <h3>4.5 Poll closure</h3>
+      <div class="diagram-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    participant O as Operator
+    participant Hub as PollHub
+    participant Store as Poll store
+    participant SQL as SQL Server
     participant Group as Poll group (all clients)
 
     O->>Hub: ClosePoll(pollCode)
     Hub->>Store: set status = Closed, freeze tally
+    Hub->>SQL: insert PollQuestionResult for any question not yet written
+    Hub->>SQL: update Poll {status: Closed, closedAt} (best effort)
     Hub->>Group: PollClosed(finalTally)
     Note over Store: TTL continues counting down;<br/>poll purged after retention window
+    Note over SQL: durable row now persists past the cache TTL
         </pre>
       </div>
       <p>
         Closing broadcasts to the whole group so any client mid-submission gets <code>PollClosed</code> instead of
-        a silent timeout. The store keeps the closed poll around briefly (retention window, see
-        <a href="#data">Section 10</a>) so late joiners can still see final results before purge.
+        a silent timeout. The status flip on the cached <code>PollState</code> happens before any SQL Server call
+        and is what makes a double-close safe: a second, concurrent <code>ClosePoll</code> sees the poll already
+        closed and is rejected before it reaches the database. Close also writes a <code>PollQuestionResult</code>
+        row (with a zero tally) for any question the operator never advanced past, so a poll closed immediately
+        after the first question still ends up with one durable row per question. The cache store keeps the
+        closed poll around briefly (retention window, see <a href="#data">Section 10</a>) so late joiners can
+        still see final results before purge; the SQL Server rows outlive that purge indefinitely.
       </p>
     </section>
 
@@ -738,6 +798,7 @@ sequenceDiagram
             <tr><td><code>backplane_publish_latency_seconds</code></td><td>Histogram</td><td>Backplane lag directly becomes fan-out latency; this is the earliest signal of a Redis/Azure SignalR degradation.</td></tr>
             <tr><td><code>join_rejected_total</code> by reason</td><td>Counter</td><td>A spike in <code>invalid_code</code> rejections is the primary signal for poll-code brute forcing.</td></tr>
             <tr><td><code>reconnect_total</code> / <code>reconnect_failed_total</code></td><td>Counter</td><td>Distinguishes normal network churn from a systemic connectivity issue.</td></tr>
+            <tr><td><code>poll_persist_failure_total</code> by checkpoint (create/advance/close)</td><td>Counter</td><td>Persistence writes fail silently from the participant's perspective by design (Section 4.4/4.5); this counter is the only signal that durable results are drifting from the live cache.</td></tr>
           </tbody>
         </table>
       </div>
@@ -833,6 +894,22 @@ sequenceDiagram
           </ol>
         </div>
       </div>
+
+      <div class="runbook">
+        <div class="runbook-head">
+          <h4>SQL Server persistence failure during an active poll</h4>
+          <span class="pill sev-info">Minor</span>
+        </div>
+        <div class="runbook-body">
+          <ol>
+            <li>Symptom: the live poll (join, answer, advance, close) works normally throughout &mdash; this is a silent failure by design, so it's only found via logs or a post-session DB check, never a participant report.</li>
+            <li>Confirm via application logs: <code>NextQuestion</code>/<code>ClosePoll</code> log an error (poll code + question index) whenever the SQL Server write fails, but the hub call still returns success.</li>
+            <li>Check SQL Server/LocalDB reachability and the connection string; this is almost always a database availability issue, not an application bug, since the write path is a simple insert/update.</li>
+            <li>Impact is scoped to durable reporting only: the affected question's row is missing or the poll's <code>ClosedAt</code> is stale in <code>Polls</code>/<code>PollQuestionResults</code>, but the in-memory cache and every broadcast to participants were unaffected.</li>
+            <li>No automatic retry exists for these writes. If the poll is still in cache (within the 24h TTL), the next <code>NextQuestion</code>/<code>ClosePoll</code> call for that poll will attempt to backfill any question index not yet in <code>PollQuestionResults</code> &mdash; restoring DB connectivity before the poll closes is usually enough to self-heal.</li>
+          </ol>
+        </div>
+      </div>
     </section>
 
     <section id="security">
@@ -872,24 +949,32 @@ sequenceDiagram
     <section id="data">
       <h2><span class="num">10</span> Data lifecycle</h2>
       <p class="section-intro">
-        Everything here is designed to be short-lived, which simplifies both compliance posture and operational
-        recovery.
+        The live path is still short-lived and TTL-bound, which keeps compliance posture and operational recovery
+        simple for everything a participant directly interacts with. SQL Server now sits alongside it as an
+        intentionally durable, append-mostly copy of poll metadata and results &mdash; the two stores have
+        different retention on purpose and neither replaces the other.
       </p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Data</th><th>Store</th><th>Retention</th></tr></thead>
           <tbody>
-            <tr><td>Poll definition (question, options)</td><td>Shared cache / store, keyed by poll code</td><td>Lifetime of poll + short grace period after close</td></tr>
+            <tr><td>Poll definition (question, options)</td><td>Shared cache / store, keyed by poll code</td><td>Lifetime of poll + short grace period after close (24h TTL)</td></tr>
             <tr><td>Live tally</td><td>Same store, in-memory-fast</td><td>Same as poll definition</td></tr>
             <tr><td>Connection &rarr; answered-option map (dedup)</td><td>Same store or hub-local cache backed by the store</td><td>Same as poll definition; discarded on purge</td></tr>
             <tr><td>Poll code</td><td>Same store</td><td>Released back to the available pool after purge, with enough delay to avoid immediate reuse confusion</td></tr>
+            <tr><td>Poll record (code, template, status, timestamps)</td><td>SQL Server <code>Polls</code> table</td><td>Indefinite &mdash; written once at creation, updated at close; no purge job exists yet</td></tr>
+            <tr><td>Per-question final results (text, options, correct answer, tally)</td><td>SQL Server <code>PollQuestionResults</code> table</td><td>Indefinite &mdash; written per question at advance/close, one row per question per poll</td></tr>
           </tbody>
         </table>
       </div>
       <p>
-        No participant-identifying data is retained because none is collected. This keeps the data-lifecycle
-        story simple: a TTL on the poll record is sufficient cleanup, with no separate user-data deletion process
-        required.
+        No participant-identifying data is retained anywhere, in either store, because none is collected: the
+        SQL Server rows are aggregate tallies and question snapshots, never tied to a connection ID or any other
+        participant identifier. This keeps the compliance story simple even with a durable table added &mdash; no
+        participant has data to request deletion of. The durable rows are indefinite by default because this is a
+        new capability with no retention policy defined yet; if poll history should eventually be purged (e.g. for
+        storage growth or a data-retention policy), that needs an explicit decision and a scheduled job, not an
+        assumption carried over from the cache's TTL behavior.
       </p>
     </section>
 
@@ -904,6 +989,7 @@ sequenceDiagram
         <li>Health checks wired to readiness (backplane-aware), not just process liveness.</li>
         <li>Dashboards built against the metrics in Section 7 before go-live, not after the first incident.</li>
         <li>Capacity pre-warmed ahead of any known large scheduled session.</li>
+        <li>SQL Server migration applied (<code>dotnet ef database update</code>) and connection string verified reachable from every hub instance before traffic is routed to it.</li>
       </ul>
     </section>
 
