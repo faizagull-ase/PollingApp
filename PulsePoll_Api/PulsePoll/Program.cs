@@ -26,7 +26,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(SignalRClientCorsPolicy, policy =>
     {
-        policy.WithOrigins(builder.Configuration["Cors:SignalRClient"])
+        policy.WithOrigins(builder.Configuration.GetSection("Cors:SignalRClient").Get<string[]>() ?? [])
             .AllowAnyHeader()
             .AllowAnyMethod();
     });

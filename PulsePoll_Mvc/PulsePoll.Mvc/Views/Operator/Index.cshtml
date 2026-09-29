@@ -1,0 +1,66 @@
+@{
+    ViewData["Title"] = "PulsePoll — Operator";
+}
+
+@section Styles {
+  <link rel="stylesheet" href="~/css/operator.css">
+}
+
+<div class="wrap">
+  <h1>PulsePoll — Operator</h1>
+  <p class="sub">Build a poll, share the code, drive it live.</p>
+
+  <div class="card" id="setup-card">
+    <h2>Start a poll</h2>
+
+    <label>Template title</label>
+    <input type="text" id="title-input" placeholder="e.g. Team retro pulse check">
+
+    <div id="questions-container"></div>
+
+    <div class="actions" style="margin-bottom: 16px;">
+      <button type="button" class="secondary" id="add-question-btn">+ Add question</button>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="create-poll-btn">Create template &amp; start poll</button>
+    </div>
+    <div class="msg error hidden" id="setup-error"></div>
+
+    <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);">
+
+    <h2>Or join an existing poll code</h2>
+    <div class="actions">
+      <input type="text" id="join-code-input" placeholder="Poll code" style="max-width: 160px; margin-bottom: 0;">
+      <button type="button" class="secondary" id="join-code-btn">Connect</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="live-card">
+    <div class="status-line">
+      <span>Poll code:</span>
+      <span class="code-display" id="poll-code-display"></span>
+      <span class="pill open" id="status-pill">Open</span>
+    </div>
+
+    <div id="question-panel">
+      <h2 id="question-text"></h2>
+      <div id="options-list"></div>
+    </div>
+
+    <div class="actions" style="margin-top: 16px;">
+      <button type="button" id="next-question-btn">Next question</button>
+      <button type="button" class="danger" id="close-poll-btn">Close poll</button>
+    </div>
+    <div class="msg" id="live-msg"></div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <h2>Results</h2>
+    <div id="results-container"></div>
+  </div>
+</div>
+
+@section Scripts {
+  <script src="~/js/operator.js"></script>
+}

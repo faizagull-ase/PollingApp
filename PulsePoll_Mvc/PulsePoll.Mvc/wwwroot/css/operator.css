@@ -1,0 +1,13 @@
+.question-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--surface-2);
+}
+.question-block .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.question-block .row input[type=text] { margin-bottom: 0; }
+.option-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.option-row input[type=text] { margin-bottom: 0; flex: 1; }
+.results-block { margin-bottom: 16px; }
+.results-block h3 { font-size: .9rem; margin: 0 0 8px; }
